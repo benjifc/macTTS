@@ -14,10 +14,15 @@ DOCS_URL = "http://127.0.0.1:8000/docs"
 SERVICE_LABEL = "com.mactts.service"
 INSTALL_SCRIPT_URL = "https://raw.githubusercontent.com/benjifc/macTTS/main/install.sh"
 
+# Rutas a los iconos template (SF Symbols style)
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+ICON_ACTIVE = os.path.join(_BASE_DIR, "assets", "menubar_active.png")
+ICON_MUTED = os.path.join(_BASE_DIR, "assets", "menubar_muted.png")
+
 
 class MacTTSMenuBar(rumps.App):
     def __init__(self):
-        super().__init__("MacTTS", title="\U0001F507")  # Inicia como muted hasta verificar
+        super().__init__("MacTTS", icon=ICON_MUTED, template=True)  # Template = auto dark/light
         self.status_item = rumps.MenuItem("Estado: Verificando...")
         self.version_item = rumps.MenuItem("Versión: ...")
         self.update_item = rumps.MenuItem(
@@ -46,13 +51,13 @@ class MacTTSMenuBar(rumps.App):
             pass
 
         if running:
-            self.title = "\U0001F50A"  # 🔊 Speaker con sonido
+            self.icon = ICON_ACTIVE
             self.status_item.title = "Estado: Activo \u2713"
             self.menu["Iniciar Servicio"].set_callback(None)
             self.menu["Detener Servicio"].set_callback(self.stop_service)
             self._fetch_local_version()
         else:
-            self.title = "\U0001F507"  # 🔇 Speaker silenciado
+            self.icon = ICON_MUTED
             self.status_item.title = "Estado: Detenido \u2717"
             self.menu["Iniciar Servicio"].set_callback(self.start_service)
             self.menu["Detener Servicio"].set_callback(None)
