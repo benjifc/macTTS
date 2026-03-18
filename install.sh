@@ -23,11 +23,26 @@ UID_NUM=$(id -u)
 info()  { echo "[MacTTS] $*"; }
 error() { echo "[MacTTS] ERROR: $*" >&2; }
 
+# Helpers para launchctl (bootstrap puede fallar desde pipes, usamos load como fallback)
+load_agent() {
+    local plist="$1"
+    if ! launchctl bootstrap "gui/$UID_NUM" "$plist" 2>/dev/null; then
+        launchctl load -w "$plist" 2>/dev/null || true
+    fi
+}
+
+unload_agent() {
+    local label="$1"
+    local plist="$2"
+    launchctl bootout "gui/$UID_NUM/$label" 2>/dev/null || \
+        launchctl unload -w "$plist" 2>/dev/null || true
+}
+
 # ─── Desinstalar ──────────────────────────────────────────────────────────────
 uninstall() {
     info "Desinstalando MacTTS..."
-    launchctl bootout "gui/$UID_NUM/$API_LABEL" 2>/dev/null || true
-    launchctl bootout "gui/$UID_NUM/$MENUBAR_LABEL" 2>/dev/null || true
+    unload_agent "$API_LABEL" "$PLIST_DIR/$API_LABEL.plist"
+    unload_agent "$MENUBAR_LABEL" "$PLIST_DIR/$MENUBAR_LABEL.plist"
     rm -f "$PLIST_DIR/$API_LABEL.plist"
     rm -f "$PLIST_DIR/$MENUBAR_LABEL.plist"
     rm -rf "$INSTALL_DIR"
@@ -66,8 +81,8 @@ update() {
 
     # Detener servicios
     info "Deteniendo servicios..."
-    launchctl bootout "gui/$UID_NUM/$API_LABEL" 2>/dev/null || true
-    launchctl bootout "gui/$UID_NUM/$MENUBAR_LABEL" 2>/dev/null || true
+    unload_agent "$API_LABEL" "$PLIST_DIR/$API_LABEL.plist"
+    unload_agent "$MENUBAR_LABEL" "$PLIST_DIR/$MENUBAR_LABEL.plist"
 
     # Actualizar código
     if [[ -d "$INSTALL_DIR/.git" ]]; then
@@ -105,8 +120,8 @@ update() {
 
     # Reiniciar servicios
     info "Reiniciando servicios..."
-    launchctl bootstrap "gui/$UID_NUM" "$PLIST_DIR/$API_LABEL.plist"
-    launchctl bootstrap "gui/$UID_NUM" "$PLIST_DIR/$MENUBAR_LABEL.plist"
+    load_agent "$PLIST_DIR/$API_LABEL.plist"
+    load_agent "$PLIST_DIR/$MENUBAR_LABEL.plist"
 
     # Verificar
     sleep 3
@@ -258,12 +273,12 @@ generate_plists
 info "Cargando servicios..."
 
 # Descargar si ya existen
-launchctl bootout "gui/$UID_NUM/$API_LABEL" 2>/dev/null || true
-launchctl bootout "gui/$UID_NUM/$MENUBAR_LABEL" 2>/dev/null || true
+unload_agent "$API_LABEL" "$PLIST_DIR/$API_LABEL.plist"
+unload_agent "$MENUBAR_LABEL" "$PLIST_DIR/$MENUBAR_LABEL.plist"
 
 # Cargar nuevos
-launchctl bootstrap "gui/$UID_NUM" "$PLIST_DIR/$API_LABEL.plist"
-launchctl bootstrap "gui/$UID_NUM" "$PLIST_DIR/$MENUBAR_LABEL.plist"
+load_agent "$PLIST_DIR/$API_LABEL.plist"
+load_agent "$PLIST_DIR/$MENUBAR_LABEL.plist"
 
 # ─── Verificar ───────────────────────────────────────────────────────────────
 info "Esperando que el servicio inicie..."
