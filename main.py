@@ -43,7 +43,7 @@ class OpenAISpeechRequest(BaseModel):
     """Modelo compatible con POST /v1/audio/speech de OpenAI."""
     model: str = Field("tts-1", description="Modelo TTS (ignorado, usa say de macOS)")
     input: str = Field(..., min_length=1, max_length=10000, description="Texto a sintetizar")
-    voice: str = Field("Samantha", description="Nombre de voz macOS (ver GET /voices)")
+    voice: str = Field("Mónica", description="Nombre de voz macOS (ver GET /voices)")
     response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] = Field("mp3", description="Formato de audio")
     speed: float = Field(1.0, ge=0.25, le=4.0, description="Velocidad de habla (1.0 = normal)")
 

@@ -144,7 +144,7 @@ Genera audio a partir de texto. Compatible con el formato de OpenAI.
 |-------|------|-----------|---------|-------------|
 | `model` | string | Si | `"tts-1"` | Modelo TTS (aceptado pero ignorado, siempre usa `say` de macOS) |
 | `input` | string | Si | — | Texto a sintetizar (1-10,000 caracteres) |
-| `voice` | string | Si | `"Samantha"` | Nombre de voz macOS (ver `GET /voices`) |
+| `voice` | string | Si | `"Mónica"` | Nombre de voz macOS (ver `GET /voices`) |
 | `response_format` | string | No | `"mp3"` | Formato: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm` |
 | `speed` | float | No | `1.0` | Velocidad (0.25 - 4.0, donde 1.0 = ~175 WPM) |
 
@@ -153,10 +153,10 @@ Genera audio a partir de texto. Compatible con el formato de OpenAI.
 **Ejemplos:**
 
 ```bash
-# Voz por defecto (Samantha)
+# Voz por defecto (Mónica)
 curl -X POST http://127.0.0.1:8000/v1/audio/speech \
   -H "Content-Type: application/json" \
-  -d '{"model": "tts-1", "input": "Hello world", "voice": "Samantha"}' \
+  -d '{"model": "tts-1", "input": "Hola mundo", "voice": "Mónica"}' \
   -o salida.mp3
 
 # Voz en español
