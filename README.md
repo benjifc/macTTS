@@ -128,6 +128,112 @@ curl -X POST http://127.0.0.1:8000/tts \
 
 **Respuesta:** archivo de audio (`audio/aiff` o `audio/wav`).
 
+---
+
+## API compatible con OpenAI
+
+MacTTS expone endpoints 100% compatibles con la [API de TTS de OpenAI](https://platform.openai.com/docs/api-reference/audio/createSpeech), lo que permite usarlo como drop-in replacement en cualquier aplicacion que soporte un `baseUrl` personalizado (OpenClaw, LiteLLM, etc.).
+
+### `POST /v1/audio/speech`
+
+Genera audio a partir de texto. Compatible con el formato de OpenAI.
+
+**Parametros (JSON body):**
+
+| Campo | Tipo | Requerido | Default | Descripcion |
+|-------|------|-----------|---------|-------------|
+| `model` | string | Si | `"tts-1"` | Modelo TTS (aceptado pero ignorado, siempre usa `say` de macOS) |
+| `input` | string | Si | — | Texto a sintetizar (1-10,000 caracteres) |
+| `voice` | string | Si | `"alloy"` | Voz OpenAI o nombre de voz macOS directo (ver tabla abajo) |
+| `response_format` | string | No | `"mp3"` | Formato: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm` |
+| `speed` | float | No | `1.0` | Velocidad (0.25 - 4.0, donde 1.0 = ~175 WPM) |
+
+**Mapeo de voces OpenAI → macOS:**
+
+| Voz OpenAI | Voz macOS | Idioma |
+|------------|-----------|--------|
+| `alloy` | Samantha | en_US |
+| `echo` | Daniel | en_GB |
+| `fable` | Karen | en_AU |
+| `onyx` | Fred | en_US |
+| `nova` | Monica | es_ES |
+| `shimmer` | Paulina | es_MX |
+
+> Tambien puedes usar cualquier voz macOS directamente por su nombre (ej: `"Kyoko"`, `"Thomas"`, `"Tingting"`). Consulta `GET /voices` para ver todas las disponibles.
+
+**Ejemplos:**
+
+```bash
+# Usando nombre de voz OpenAI
+curl -X POST http://127.0.0.1:8000/v1/audio/speech \
+  -H "Authorization: Bearer not-needed" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "tts-1", "input": "Hola mundo", "voice": "nova"}' \
+  -o salida.mp3
+
+# Usando voz macOS directamente
+curl -X POST http://127.0.0.1:8000/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model": "tts-1", "input": "Hola mundo", "voice": "Mónica", "response_format": "wav"}' \
+  -o salida.wav
+
+# Con velocidad personalizada
+curl -X POST http://127.0.0.1:8000/v1/audio/speech \
+  -H "Content-Type: application/json" \
+  -d '{"model": "tts-1", "input": "Texto rapido", "voice": "alloy", "speed": 1.5}' \
+  -o rapido.mp3
+```
+
+**Respuesta:** archivo de audio en el formato solicitado con el `Content-Type` correspondiente.
+
+### `GET /v1/models`
+
+Lista los modelos TTS disponibles (compatible con OpenAI).
+
+```bash
+curl http://127.0.0.1:8000/v1/models
+```
+
+```json
+{
+  "object": "list",
+  "data": [
+    {"id": "tts-1", "object": "model", "created": 1699000000, "owned_by": "mactts"},
+    {"id": "tts-1-hd", "object": "model", "created": 1699000000, "owned_by": "mactts"}
+  ]
+}
+```
+
+---
+
+## Integracion con OpenClaw
+
+MacTTS se puede usar como proveedor de TTS en [OpenClaw](https://www.getopenclaw.ai/) gracias a la compatibilidad con la API de OpenAI. Anade lo siguiente a tu `openclaw.json`:
+
+```json
+{
+  "messages": {
+    "tts": {
+      "auto": "inbound",
+      "mode": "final",
+      "provider": "openai",
+      "maxTextLength": 4000,
+      "timeoutMs": 30000,
+      "openai": {
+        "baseUrl": "http://<TU_IP>:8000/v1",
+        "apiKey": "not-needed",
+        "model": "mactts",
+        "voice": "Mónica"
+      }
+    }
+  }
+}
+```
+
+> **Nota:** Sustituye `<TU_IP>` por la IP local de tu Mac (ej: `192.168.1.103`). Si OpenClaw corre en la misma maquina, puedes usar `127.0.0.1`.
+
+> **Importante:** Para que MacTTS sea accesible desde otros dispositivos de tu red local, el servicio debe escuchar en `0.0.0.0` en vez de `127.0.0.1`. Consulta la seccion de [Desarrollo](#desarrollo) para ejecutarlo manualmente, o modifica el LaunchAgent para cambiar el host.
+
 ## Actualizacion
 
 ### Desde la barra de menu
@@ -201,21 +307,26 @@ macTTS/
 ## Arquitectura
 
 ```
-┌─────────────────────┐     ┌──────────────────────┐
-│   Menu Bar (rumps)   │────▶│   API (FastAPI)       │
-│   menubar.py         │     │   main.py             │
-│                      │     │                        │
-│  - Health check /5s  │     │  GET  /health          │
-│  - Start/Stop        │     │  GET  /version         │
-│  - Update check      │     │  GET  /voices          │
-│  - Open docs         │     │  POST /tts             │
-└─────────────────────┘     └──────────┬───────────┘
-                                        │
-                                        ▼
-                              ┌──────────────────┐
-                              │   macOS `say`     │
-                              │   + `afconvert`   │
-                              └──────────────────┘
+┌─────────────────────┐     ┌────────────────────────────┐
+│   Menu Bar (rumps)   │────▶│   API (FastAPI)             │
+│   menubar.py         │     │   main.py                   │
+│                      │     │                              │
+│  - Health check /5s  │     │  GET  /health                │
+│  - Start/Stop        │     │  GET  /version               │
+│  - Update check      │     │  GET  /voices                │
+│  - Open docs         │     │  POST /tts                   │
+└─────────────────────┘     │                              │
+                             │  OpenAI-compatible:          │
+┌─────────────────────┐     │  POST /v1/audio/speech       │
+│  OpenClaw / Apps     │────▶│  GET  /v1/models             │
+│  (provider: openai)  │     └──────────────┬───────────────┘
+└─────────────────────┘                     │
+                                             ▼
+                                   ┌──────────────────┐
+                                   │   macOS `say`     │
+                                   │   + afconvert     │
+                                   │   + ffmpeg        │
+                                   └──────────────────┘
 ```
 
 - **Menu Bar** y **API** corren como procesos independientes gestionados por `launchd`

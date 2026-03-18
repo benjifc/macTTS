@@ -7,7 +7,7 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Volumes/Store/Projects/MacTTS/venv/bin/python3</string>
+        <string>/Volumes/Store/Users/benjifc/.local/share/mactts/venv/bin/python3</string>
         <string>-m</string>
         <string>uvicorn</string>
         <string>main:app</string>
@@ -18,7 +18,7 @@
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Volumes/Store/Projects/MacTTS</string>
+    <string>/Volumes/Store/Users/benjifc/.local/share/mactts</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -27,9 +27,9 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/tmp/mactts.stdout.log</string>
+    <string>/Volumes/Store/Users/benjifc/.local/share/mactts/logs/service.stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/tmp/mactts.stderr.log</string>
+    <string>/Volumes/Store/Users/benjifc/.local/share/mactts/logs/service.stderr.log</string>
 </dict>
 </plist>

@@ -39,6 +39,35 @@ class TTSRequest(BaseModel):
     format: Literal["aiff", "wav"] = Field("aiff", description="Formato de audio de salida")
 
 
+class OpenAISpeechRequest(BaseModel):
+    """Modelo compatible con POST /v1/audio/speech de OpenAI."""
+    model: str = Field("tts-1", description="Modelo TTS (ignorado, usa say de macOS)")
+    input: str = Field(..., min_length=1, max_length=10000, description="Texto a sintetizar")
+    voice: str = Field("alloy", description="Voz OpenAI (alloy/echo/fable/onyx/nova/shimmer) o nombre de voz macOS")
+    response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] = Field("mp3", description="Formato de audio")
+    speed: float = Field(1.0, ge=0.25, le=4.0, description="Velocidad de habla (1.0 = normal)")
+
+
+# Mapeo de voces OpenAI -> voces macOS
+OPENAI_VOICE_MAP: dict[str, str] = {
+    "alloy": "Samantha",
+    "echo": "Daniel",
+    "fable": "Karen",
+    "onyx": "Fred",
+    "nova": "Mónica",
+    "shimmer": "Paulina",
+}
+
+OPENAI_MEDIA_TYPES: dict[str, str] = {
+    "mp3": "audio/mpeg",
+    "opus": "audio/ogg",
+    "aac": "audio/aac",
+    "flac": "audio/flac",
+    "wav": "audio/wav",
+    "pcm": "audio/L16",
+}
+
+
 class VoiceInfo(BaseModel):
     name: str
     locale: str
@@ -112,6 +141,7 @@ async def _run_say(text: str, output_path: str, voice: str | None = None, rate: 
 
 
 async def _convert_to_wav(aiff_path: str) -> str:
+    """Convierte AIFF a WAV usando afconvert (legacy, usado por POST /tts)."""
     wav_path = aiff_path.replace(".aiff", ".wav")
     process = await asyncio.create_subprocess_exec(
         "afconvert", "-f", "WAVE", "-d", "LEI16", aiff_path, wav_path,
@@ -123,6 +153,44 @@ async def _convert_to_wav(aiff_path: str) -> str:
         raise HTTPException(status_code=500, detail=f"Error convirtiendo audio: {stderr.decode()}")
     os.unlink(aiff_path)
     return wav_path
+
+
+async def _convert_format(aiff_path: str, target_format: str) -> str:
+    """Convierte AIFF a cualquier formato soportado por OpenAI API."""
+    if target_format == "aiff":
+        return aiff_path
+
+    output_path = aiff_path.replace(".aiff", f".{target_format}")
+
+    if target_format == "wav":
+        cmd = ["afconvert", "-f", "WAVE", "-d", "LEI16", aiff_path, output_path]
+    else:
+        # ffmpeg para mp3, opus, aac, flac, pcm
+        format_args: dict[str, list[str]] = {
+            "mp3": ["-codec:a", "libmp3lame", "-b:a", "192k"],
+            "opus": ["-codec:a", "libopus", "-b:a", "128k"],
+            "aac": ["-codec:a", "aac", "-b:a", "192k"],
+            "flac": ["-codec:a", "flac"],
+            "pcm": ["-f", "s16le", "-acodec", "pcm_s16le", "-ar", "24000"],
+        }
+        cmd = ["/opt/homebrew/bin/ffmpeg", "-y", "-i", aiff_path] + format_args[target_format] + [output_path]
+
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, stderr = await process.communicate()
+    if process.returncode != 0:
+        raise HTTPException(status_code=500, detail=f"Error convirtiendo audio: {stderr.decode()}")
+
+    os.unlink(aiff_path)
+    return output_path
+
+
+# ---------------------------------------------------------------------------
+# Endpoints originales (retrocompatibles)
+# ---------------------------------------------------------------------------
 
 
 @app.post("/tts")
@@ -160,6 +228,65 @@ async def text_to_speech(request: TTSRequest):
         filename=filename,
         background=BackgroundTask(os.unlink, tmp_path),
     )
+
+
+# ---------------------------------------------------------------------------
+# Endpoints OpenAI-compatible  (POST /v1/audio/speech, GET /v1/models)
+# ---------------------------------------------------------------------------
+
+
+@app.post("/v1/audio/speech")
+async def openai_speech(request: OpenAISpeechRequest):
+    """Endpoint compatible con OpenAI TTS API."""
+    # Resolver voz: si es nombre OpenAI, mapear; si no, usar directo como voz macOS
+    voice = OPENAI_VOICE_MAP.get(request.voice, request.voice)
+
+    # Convertir speed (1.0 = normal) a rate en WPM (default macOS ~175 WPM)
+    rate = int(175 * request.speed) if request.speed != 1.0 else None
+
+    # Validar que la voz existe
+    voices = await _get_voices()
+    voice_names = [v["name"] for v in voices]
+    if voice not in voice_names:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error": {
+                    "message": f"Voice '{request.voice}' not found. Use one of: {', '.join(OPENAI_VOICE_MAP.keys())} or a macOS voice name.",
+                    "type": "invalid_request_error",
+                    "code": "voice_not_found",
+                }
+            },
+        )
+
+    # Sintetizar como AIFF
+    tmp = tempfile.NamedTemporaryFile(prefix="mactts_oai_", suffix=".aiff", delete=False)
+    tmp_path = tmp.name
+    tmp.close()
+
+    await _run_say(request.input, tmp_path, voice, rate)
+
+    # Convertir al formato solicitado
+    output_path = await _convert_format(tmp_path, request.response_format)
+
+    return FileResponse(
+        path=output_path,
+        media_type=OPENAI_MEDIA_TYPES[request.response_format],
+        filename=f"speech.{request.response_format}",
+        background=BackgroundTask(os.unlink, output_path),
+    )
+
+
+@app.get("/v1/models")
+async def openai_list_models():
+    """Lista modelos disponibles (compatible con OpenAI API)."""
+    return {
+        "object": "list",
+        "data": [
+            {"id": "tts-1", "object": "model", "created": 1699000000, "owned_by": "mactts"},
+            {"id": "tts-1-hd", "object": "model", "created": 1699000000, "owned_by": "mactts"},
+        ],
+    }
 
 
 if __name__ == "__main__":
