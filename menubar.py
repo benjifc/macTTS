@@ -1,11 +1,22 @@
 import json
 import os
 import subprocess
+import sys
 import threading
 import urllib.request
 import webbrowser
 
+import AppKit  # pyobjc — ocultar icono del Dock
 import rumps
+
+# ---------------------------------------------------------------------------
+# Ocultar del Dock: marca este proceso como "UI Element" (solo menu bar,
+# sin icono en el Dock ni entrada en Cmd+Tab).
+# Equivalente a LSUIElement=true en un Info.plist de un .app bundle.
+# ---------------------------------------------------------------------------
+_info = AppKit.NSBundle.mainBundle().infoDictionary()
+_info["LSBackgroundOnly"] = "0"       # NO es background-only (necesita menu bar)
+_info["LSUIElement"] = "1"            # SÍ es UI element (sin Dock)
 
 HEALTH_URL = "http://127.0.0.1:8000/health"
 VERSION_URL = "http://127.0.0.1:8000/version"
