@@ -35,7 +35,7 @@ _voices_cache: list[dict] | None = None
 class TTSRequest(BaseModel):
     text: str = Field(..., min_length=1, max_length=10000, description="Texto a sintetizar")
     voice: str | None = Field(None, description="Nombre de la voz (ver GET /voices)")
-    rate: int | None = Field(None, ge=1, le=700, description="Palabras por minuto")
+    rate: int = Field(220, ge=1, le=700, description="Palabras por minuto")
     format: Literal["aiff", "wav"] = Field("aiff", description="Formato de audio de salida")
 
 
@@ -230,8 +230,8 @@ async def openai_speech(request: OpenAISpeechRequest):
     """Endpoint compatible con OpenAI TTS API."""
     voice = request.voice
 
-    # Convertir speed (1.0 = normal) a rate en WPM (default macOS ~175 WPM)
-    rate = int(175 * request.speed) if request.speed != 1.0 else None
+    # Convertir speed (1.0 = normal) a rate en WPM (default 220 WPM)
+    rate = int(220 * request.speed)
 
     # Validar que la voz existe
     voices = await _get_voices()
