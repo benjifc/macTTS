@@ -43,20 +43,10 @@ class OpenAISpeechRequest(BaseModel):
     """Modelo compatible con POST /v1/audio/speech de OpenAI."""
     model: str = Field("tts-1", description="Modelo TTS (ignorado, usa say de macOS)")
     input: str = Field(..., min_length=1, max_length=10000, description="Texto a sintetizar")
-    voice: str = Field("alloy", description="Voz OpenAI (alloy/echo/fable/onyx/nova/shimmer) o nombre de voz macOS")
+    voice: str = Field("Samantha", description="Nombre de voz macOS (ver GET /voices)")
     response_format: Literal["mp3", "opus", "aac", "flac", "wav", "pcm"] = Field("mp3", description="Formato de audio")
     speed: float = Field(1.0, ge=0.25, le=4.0, description="Velocidad de habla (1.0 = normal)")
 
-
-# Mapeo de voces OpenAI -> voces macOS
-OPENAI_VOICE_MAP: dict[str, str] = {
-    "alloy": "Samantha",
-    "echo": "Daniel",
-    "fable": "Karen",
-    "onyx": "Fred",
-    "nova": "Mónica",
-    "shimmer": "Paulina",
-}
 
 OPENAI_MEDIA_TYPES: dict[str, str] = {
     "mp3": "audio/mpeg",
@@ -238,8 +228,7 @@ async def text_to_speech(request: TTSRequest):
 @app.post("/v1/audio/speech")
 async def openai_speech(request: OpenAISpeechRequest):
     """Endpoint compatible con OpenAI TTS API."""
-    # Resolver voz: si es nombre OpenAI, mapear; si no, usar directo como voz macOS
-    voice = OPENAI_VOICE_MAP.get(request.voice, request.voice)
+    voice = request.voice
 
     # Convertir speed (1.0 = normal) a rate en WPM (default macOS ~175 WPM)
     rate = int(175 * request.speed) if request.speed != 1.0 else None
@@ -252,7 +241,7 @@ async def openai_speech(request: OpenAISpeechRequest):
             status_code=400,
             detail={
                 "error": {
-                    "message": f"Voice '{request.voice}' not found. Use one of: {', '.join(OPENAI_VOICE_MAP.keys())} or a macOS voice name.",
+                    "message": f"Voice '{request.voice}' not found. Use GET /voices for available voices.",
                     "type": "invalid_request_error",
                     "code": "voice_not_found",
                 }

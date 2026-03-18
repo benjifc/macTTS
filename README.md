@@ -144,34 +144,22 @@ Genera audio a partir de texto. Compatible con el formato de OpenAI.
 |-------|------|-----------|---------|-------------|
 | `model` | string | Si | `"tts-1"` | Modelo TTS (aceptado pero ignorado, siempre usa `say` de macOS) |
 | `input` | string | Si | — | Texto a sintetizar (1-10,000 caracteres) |
-| `voice` | string | Si | `"alloy"` | Voz OpenAI o nombre de voz macOS directo (ver tabla abajo) |
+| `voice` | string | Si | `"Samantha"` | Nombre de voz macOS (ver `GET /voices`) |
 | `response_format` | string | No | `"mp3"` | Formato: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm` |
 | `speed` | float | No | `1.0` | Velocidad (0.25 - 4.0, donde 1.0 = ~175 WPM) |
 
-**Mapeo de voces OpenAI → macOS:**
-
-| Voz OpenAI | Voz macOS | Idioma |
-|------------|-----------|--------|
-| `alloy` | Samantha | en_US |
-| `echo` | Daniel | en_GB |
-| `fable` | Karen | en_AU |
-| `onyx` | Fred | en_US |
-| `nova` | Monica | es_ES |
-| `shimmer` | Paulina | es_MX |
-
-> Tambien puedes usar cualquier voz macOS directamente por su nombre (ej: `"Kyoko"`, `"Thomas"`, `"Tingting"`). Consulta `GET /voices` para ver todas las disponibles.
+> Usa directamente los nombres de voz de macOS (`say`). Consulta `GET /voices` para ver todas las disponibles en tu sistema (ej: `"Samantha"`, `"Mónica"`, `"Paulina"`, `"Daniel"`, `"Kyoko"`).
 
 **Ejemplos:**
 
 ```bash
-# Usando nombre de voz OpenAI
+# Voz por defecto (Samantha)
 curl -X POST http://127.0.0.1:8000/v1/audio/speech \
-  -H "Authorization: Bearer not-needed" \
   -H "Content-Type: application/json" \
-  -d '{"model": "tts-1", "input": "Hola mundo", "voice": "nova"}' \
+  -d '{"model": "tts-1", "input": "Hello world", "voice": "Samantha"}' \
   -o salida.mp3
 
-# Usando voz macOS directamente
+# Voz en español
 curl -X POST http://127.0.0.1:8000/v1/audio/speech \
   -H "Content-Type: application/json" \
   -d '{"model": "tts-1", "input": "Hola mundo", "voice": "Mónica", "response_format": "wav"}' \
@@ -180,7 +168,7 @@ curl -X POST http://127.0.0.1:8000/v1/audio/speech \
 # Con velocidad personalizada
 curl -X POST http://127.0.0.1:8000/v1/audio/speech \
   -H "Content-Type: application/json" \
-  -d '{"model": "tts-1", "input": "Texto rapido", "voice": "alloy", "speed": 1.5}' \
+  -d '{"model": "tts-1", "input": "Texto rapido", "voice": "Paulina", "speed": 1.5}' \
   -o rapido.mp3
 ```
 
