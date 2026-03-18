@@ -52,12 +52,14 @@ class MacTTSMenuBar(rumps.App):
 
         if running:
             self.icon = ICON_ACTIVE
+            self.template = True   # macOS tinta blanco/negro según modo
             self.status_item.title = "Estado: Activo \u2713"
             self.menu["Iniciar Servicio"].set_callback(None)
             self.menu["Detener Servicio"].set_callback(self.stop_service)
             self._fetch_local_version()
         else:
             self.icon = ICON_MUTED
+            self.template = None   # Color fijo rojo, sin tinting de macOS
             self.status_item.title = "Estado: Detenido \u2717"
             self.menu["Iniciar Servicio"].set_callback(self.start_service)
             self.menu["Detener Servicio"].set_callback(None)
