@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import shutil
 import tempfile
 from typing import Literal
 
@@ -145,6 +146,32 @@ async def _convert_to_wav(aiff_path: str) -> str:
     return wav_path
 
 
+def _resolve_ffmpeg() -> str:
+    """Localiza el binario de ffmpeg de forma robusta.
+
+    Prioriza el que esté en el PATH (shutil.which) y, si no lo encuentra,
+    prueba las ubicaciones habituales de Homebrew (Apple Silicon e Intel).
+    Lanza HTTP 500 si ffmpeg no está disponible, ya que los formatos
+    mp3/opus/aac/flac/pcm lo requieren (wav y aiff no).
+    """
+    found = shutil.which("ffmpeg")
+    if found:
+        return found
+
+    for candidate in ("/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg"):
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+
+    raise HTTPException(
+        status_code=500,
+        detail=(
+            "ffmpeg no encontrado. Es necesario para los formatos "
+            "mp3/opus/aac/flac/pcm. Instálalo (p. ej. 'brew install ffmpeg') "
+            "o usa response_format=wav o aiff."
+        ),
+    )
+
+
 async def _convert_format(aiff_path: str, target_format: str) -> str:
     """Convierte AIFF a cualquier formato soportado por OpenAI API."""
     if target_format == "aiff":
@@ -163,7 +190,8 @@ async def _convert_format(aiff_path: str, target_format: str) -> str:
             "flac": ["-codec:a", "flac"],
             "pcm": ["-f", "s16le", "-acodec", "pcm_s16le", "-ar", "24000"],
         }
-        cmd = ["/opt/homebrew/bin/ffmpeg", "-y", "-i", aiff_path] + format_args[target_format] + [output_path]
+        ffmpeg = _resolve_ffmpeg()
+        cmd = [ffmpeg, "-y", "-i", aiff_path] + format_args[target_format] + [output_path]
 
     process = await asyncio.create_subprocess_exec(
         *cmd,
