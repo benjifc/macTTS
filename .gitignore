@@ -1,5 +1,29 @@
-venv/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# Runtime
 logs/
+*.log
+
+# Generated audio
+*.aiff
+*.wav
+*.mp3
+
+# macOS
+.DS_Store
+
+# Editors / tooling
 .claude/
+.idea/
+.vscode/
