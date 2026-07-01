@@ -1,7 +1,6 @@
 import json
 import os
 import subprocess
-import sys
 import threading
 import urllib.request
 import webbrowser
