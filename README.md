@@ -1,76 +1,106 @@
 # MacTTS
 
-REST API para Text-to-Speech nativa de macOS con icono en la barra de menu y actualizaciones automaticas.
+A local REST API that turns macOS's built-in speech engine into an HTTP
+service. MacTTS wraps the native `say` command so any app, script, or
+automation can generate speech audio from text over HTTP — no cloud, no API
+keys, no per-character billing.
 
-MacTTS expone el motor de sintesis de voz de macOS (`say`) como una API REST moderna, permitiendo a cualquier aplicacion generar audio a partir de texto via HTTP.
+It ships with a menu bar app for start/stop and one-click self-updates, and
+exposes an **OpenAI-compatible** endpoint so it can be dropped into any tool
+that supports a custom `baseUrl`.
 
-## Instalacion
+## Features
+
+- **Native macOS voices** — uses the system `say` command and every voice
+  installed on your Mac (English, Spanish, Japanese, and dozens more).
+- **Simple REST API** — `POST /tts` returns an audio file for a given text.
+- **OpenAI-compatible API** — `POST /v1/audio/speech` and `GET /v1/models`
+  work as a drop-in replacement for the OpenAI TTS API.
+- **Multiple output formats** — AIFF, WAV, MP3, Opus, AAC, FLAC, and PCM.
+- **Menu bar app** — live status, version display, start/stop, one-click
+  updates, and a shortcut to the interactive docs.
+- **Self-updating** — checks GitHub for new releases and updates in place,
+  preserving your virtual environment and logs.
+- **Local by default** — the API binds to `127.0.0.1` (loopback) only.
+- **Interactive docs** — auto-generated Swagger UI at `/docs`.
+
+## Stack
+
+| Layer      | Technology                                        |
+| ---------- | ------------------------------------------------- |
+| API        | [FastAPI](https://fastapi.tiangolo.com/) + [Uvicorn](https://www.uvicorn.org/) |
+| Menu bar   | [rumps](https://github.com/jaredks/rumps) + [pyobjc](https://pyobjc.readthedocs.io/) |
+| TTS engine | macOS `say`                                       |
+| Conversion | `afconvert` (WAV) and `ffmpeg` (MP3/Opus/AAC/FLAC/PCM) |
+| Service    | `launchd` (LaunchAgents)                          |
+
+## Requirements
+
+- macOS 13 (Ventura) or later
+- Python 3.10+
+- [`ffmpeg`](https://ffmpeg.org/) — only required for MP3, Opus, AAC, FLAC,
+  and PCM output (`brew install ffmpeg`). AIFF and WAV work without it.
+
+## Installation
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/benjifc/macTTS/main/install.sh | bash
 ```
 
-Esto:
-- Descarga MacTTS en `~/.local/share/mactts/`
-- Crea un entorno virtual Python con las dependencias
-- Registra dos LaunchAgents (API + barra de menu)
-- Inicia el servicio automaticamente
+The installer:
 
-### Requisitos
+1. Downloads MacTTS to `~/.local/share/mactts/`.
+2. Creates a Python virtual environment and installs the dependencies.
+3. Registers two LaunchAgents (the API and the menu bar app).
+4. Starts the service automatically and on every login.
 
-- macOS 13+ (Ventura o superior)
-- Python 3.10+
+Once installed, the service runs at `http://127.0.0.1:8000` and the
+interactive documentation is available at
+[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
 
-## Uso
+## Menu bar app
 
-Una vez instalado, el servicio corre en `http://127.0.0.1:8000`. La documentacion interactiva esta en [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+A small icon lives in the macOS menu bar:
 
-### Barra de menu
+| Icon                                            | Meaning          |
+| ----------------------------------------------- | ---------------- |
+| ![active](assets/menubar_active.png) active     | Service running  |
+| ![muted](assets/menubar_muted.png) muted        | Service stopped  |
 
-Un icono aparece en la barra de menu de macOS:
-
-| Icono | Significado |
-|-------|-------------|
-| 🔊 | Servicio activo |
-| 🔇 | Servicio detenido |
-
-Al hacer click se muestra un menu con:
-- **Estado** del servicio (activo/detenido)
-- **Version** instalada
-- **Iniciar / Detener** servicio
-- **Buscar Actualizaciones** (compara con GitHub y actualiza con un click)
-- **Abrir API Docs** (abre la documentacion Swagger en el navegador)
-- **Salir**
+Clicking it opens a menu with the service status, installed version,
+start/stop controls, a **Check for Updates** action (compares against GitHub
+and updates with one click), and a shortcut to the API docs.
 
 ## API
 
-### `GET /health`
+Base URL: `http://127.0.0.1:8000`
 
-Health check del servicio.
+| Method | Endpoint             | Description                                    |
+| ------ | -------------------- | ---------------------------------------------- |
+| GET    | `/health`            | Health check.                                  |
+| GET    | `/version`           | Installed version.                             |
+| GET    | `/voices`            | List every voice available on the system.      |
+| POST   | `/tts`               | Synthesize text to audio (AIFF or WAV).        |
+| POST   | `/v1/audio/speech`   | OpenAI-compatible speech synthesis.            |
+| GET    | `/v1/models`         | OpenAI-compatible model list.                  |
+
+### `GET /health`
 
 ```bash
 curl http://127.0.0.1:8000/health
-```
-
-```json
-{"status": "ok"}
+# {"status": "ok"}
 ```
 
 ### `GET /version`
 
-Version instalada.
-
 ```bash
 curl http://127.0.0.1:8000/version
-```
-
-```json
-{"version": "1.0.0"}
+# {"version": "2.0.0"}
 ```
 
 ### `GET /voices`
 
-Lista todas las voces disponibles en el sistema.
+Lists every voice installed on the system.
 
 ```bash
 curl http://127.0.0.1:8000/voices
@@ -78,105 +108,88 @@ curl http://127.0.0.1:8000/voices
 
 ```json
 [
-  {
-    "name": "Paulina",
-    "locale": "es_MX",
-    "sample": "Hola, me llamo Paulina y soy una voz mexicana."
-  },
-  {
-    "name": "Samantha",
-    "locale": "en_US",
-    "sample": "Hello, my name is Samantha. I am an American-English voice."
-  }
+  { "name": "Paulina",  "locale": "es_MX", "sample": "Hola, me llamo Paulina y soy una voz mexicana." },
+  { "name": "Samantha", "locale": "en_US", "sample": "Hello, my name is Samantha. I am an American-English voice." }
 ]
 ```
 
 ### `POST /tts`
 
-Sintetiza texto a audio.
+Synthesizes text to an audio file.
 
-**Parametros (JSON body):**
-
-| Campo | Tipo | Requerido | Descripcion |
-|-------|------|-----------|-------------|
-| `text` | string | Si | Texto a sintetizar (1-10,000 caracteres) |
-| `voice` | string | No | Nombre de la voz (ver `GET /voices`) |
-| `rate` | integer | No | Velocidad en palabras por minuto (1-700) |
-| `format` | string | No | `"aiff"` (default) o `"wav"` |
-
-**Ejemplos:**
+| Field    | Type    | Required | Default  | Description                          |
+| -------- | ------- | -------- | -------- | ------------------------------------ |
+| `text`   | string  | yes      | —        | Text to synthesize (1–10,000 chars). |
+| `voice`  | string  | no       | system   | Voice name (see `GET /voices`).      |
+| `rate`   | integer | no       | `220`    | Words per minute (1–700).            |
+| `format` | string  | no       | `"aiff"` | `"aiff"` or `"wav"`.                 |
 
 ```bash
-# Sintesis basica (voz por defecto, formato AIFF)
+# Basic synthesis (default voice, AIFF)
 curl -X POST http://127.0.0.1:8000/tts \
   -H "Content-Type: application/json" \
-  -d '{"text": "Hola mundo"}' \
-  -o salida.aiff
+  -d '{"text": "Hello world"}' \
+  -o output.aiff
 
-# Voz especifica en formato WAV
+# Specific voice, WAV
 curl -X POST http://127.0.0.1:8000/tts \
   -H "Content-Type: application/json" \
   -d '{"text": "Hello world", "voice": "Samantha", "format": "wav"}' \
-  -o salida.wav
+  -o output.wav
 
-# Con velocidad personalizada
+# Custom rate
 curl -X POST http://127.0.0.1:8000/tts \
   -H "Content-Type: application/json" \
-  -d '{"text": "Texto rapido", "voice": "Paulina", "rate": 300, "format": "wav"}' \
-  -o rapido.wav
+  -d '{"text": "Fast text", "voice": "Paulina", "rate": 300, "format": "wav"}' \
+  -o fast.wav
 ```
 
-**Respuesta:** archivo de audio (`audio/aiff` o `audio/wav`).
+Returns an audio file (`audio/aiff` or `audio/wav`).
 
----
+## OpenAI-compatible API
 
-## API compatible con OpenAI
-
-MacTTS expone endpoints 100% compatibles con la [API de TTS de OpenAI](https://platform.openai.com/docs/api-reference/audio/createSpeech), lo que permite usarlo como drop-in replacement en cualquier aplicacion que soporte un `baseUrl` personalizado (OpenClaw, LiteLLM, etc.).
+MacTTS exposes endpoints that mirror the
+[OpenAI TTS API](https://platform.openai.com/docs/api-reference/audio/createSpeech),
+so it works as a drop-in replacement in any application that accepts a custom
+`baseUrl` (LiteLLM, OpenClaw, and similar).
 
 ### `POST /v1/audio/speech`
 
-Genera audio a partir de texto. Compatible con el formato de OpenAI.
+| Field             | Type   | Required | Default    | Description                                            |
+| ----------------- | ------ | -------- | ---------- | ------------------------------------------------------ |
+| `model`           | string | yes      | `"tts-1"`  | Accepted but ignored — always uses macOS `say`.        |
+| `input`           | string | yes      | —          | Text to synthesize (1–10,000 chars).                   |
+| `voice`           | string | yes      | `"Mónica"` | macOS voice name (see `GET /voices`).                  |
+| `response_format` | string | no       | `"mp3"`    | `mp3`, `opus`, `aac`, `flac`, `wav`, or `pcm`.         |
+| `speed`           | float  | no       | `1.0`      | Speech speed 0.25–4.0 (`1.0` ≈ 220 WPM).               |
 
-**Parametros (JSON body):**
-
-| Campo | Tipo | Requerido | Default | Descripcion |
-|-------|------|-----------|---------|-------------|
-| `model` | string | Si | `"tts-1"` | Modelo TTS (aceptado pero ignorado, siempre usa `say` de macOS) |
-| `input` | string | Si | — | Texto a sintetizar (1-10,000 caracteres) |
-| `voice` | string | Si | `"Mónica"` | Nombre de voz macOS (ver `GET /voices`) |
-| `response_format` | string | No | `"mp3"` | Formato: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm` |
-| `speed` | float | No | `1.0` | Velocidad (0.25 - 4.0, donde 1.0 = ~175 WPM) |
-
-> Usa directamente los nombres de voz de macOS (`say`). Consulta `GET /voices` para ver todas las disponibles en tu sistema (ej: `"Samantha"`, `"Mónica"`, `"Paulina"`, `"Daniel"`, `"Kyoko"`).
-
-**Ejemplos:**
+> `voice` takes a macOS voice name directly. Call `GET /voices` to see what's
+> installed (for example `"Samantha"`, `"Mónica"`, `"Paulina"`, `"Daniel"`,
+> `"Kyoko"`).
 
 ```bash
-# Voz por defecto (Mónica)
+# Default voice
 curl -X POST http://127.0.0.1:8000/v1/audio/speech \
   -H "Content-Type: application/json" \
-  -d '{"model": "tts-1", "input": "Hola mundo", "voice": "Mónica"}' \
-  -o salida.mp3
+  -d '{"model": "tts-1", "input": "Hello world", "voice": "Mónica"}' \
+  -o output.mp3
 
-# Voz en español
+# WAV output
 curl -X POST http://127.0.0.1:8000/v1/audio/speech \
   -H "Content-Type: application/json" \
-  -d '{"model": "tts-1", "input": "Hola mundo", "voice": "Mónica", "response_format": "wav"}' \
-  -o salida.wav
+  -d '{"model": "tts-1", "input": "Hello world", "voice": "Mónica", "response_format": "wav"}' \
+  -o output.wav
 
-# Con velocidad personalizada
+# Faster speech
 curl -X POST http://127.0.0.1:8000/v1/audio/speech \
   -H "Content-Type: application/json" \
-  -d '{"model": "tts-1", "input": "Texto rapido", "voice": "Paulina", "speed": 1.5}' \
-  -o rapido.mp3
+  -d '{"model": "tts-1", "input": "Fast text", "voice": "Paulina", "speed": 1.5}' \
+  -o fast.mp3
 ```
 
-**Respuesta:** archivo de audio en el formato solicitado con el `Content-Type` correspondiente.
+Returns an audio file in the requested format with the matching `Content-Type`.
 
 ### `GET /v1/models`
-
-Lista los modelos TTS disponibles (compatible con OpenAI).
 
 ```bash
 curl http://127.0.0.1:8000/v1/models
@@ -186,17 +199,17 @@ curl http://127.0.0.1:8000/v1/models
 {
   "object": "list",
   "data": [
-    {"id": "tts-1", "object": "model", "created": 1699000000, "owned_by": "mactts"},
-    {"id": "tts-1-hd", "object": "model", "created": 1699000000, "owned_by": "mactts"}
+    { "id": "tts-1",    "object": "model", "created": 1699000000, "owned_by": "mactts" },
+    { "id": "tts-1-hd", "object": "model", "created": 1699000000, "owned_by": "mactts" }
   ]
 }
 ```
 
----
+## OpenClaw integration
 
-## Integracion con OpenClaw
-
-MacTTS se puede usar como proveedor de TTS en [OpenClaw](https://www.getopenclaw.ai/) gracias a la compatibilidad con la API de OpenAI. Anade lo siguiente a tu `openclaw.json`:
+Because of the OpenAI compatibility, MacTTS can act as a TTS provider for
+[OpenClaw](https://www.getopenclaw.ai/). Add the following to your
+`openclaw.json`:
 
 ```json
 {
@@ -208,7 +221,7 @@ MacTTS se puede usar como proveedor de TTS en [OpenClaw](https://www.getopenclaw
       "maxTextLength": 4000,
       "timeoutMs": 30000,
       "openai": {
-        "baseUrl": "http://<TU_IP>:8000/v1",
+        "baseUrl": "http://<YOUR_IP>:8000/v1",
         "apiKey": "not-needed",
         "model": "mactts",
         "voice": "Mónica"
@@ -218,44 +231,40 @@ MacTTS se puede usar como proveedor de TTS en [OpenClaw](https://www.getopenclaw
 }
 ```
 
-> **Nota:** Sustituye `<TU_IP>` por la IP local de tu Mac (ej: `192.168.1.103`). Si OpenClaw corre en la misma maquina, puedes usar `127.0.0.1`.
+> Replace `<YOUR_IP>` with your Mac's local IP (for example `192.168.1.103`),
+> or use `127.0.0.1` if OpenClaw runs on the same machine.
+>
+> To reach MacTTS from other devices on your network, the service must listen
+> on `0.0.0.0` instead of `127.0.0.1`. Run it manually (see
+> [Development](#development)) or edit the LaunchAgent's `--host` argument.
 
-> **Importante:** Para que MacTTS sea accesible desde otros dispositivos de tu red local, el servicio debe escuchar en `0.0.0.0` en vez de `127.0.0.1`. Consulta la seccion de [Desarrollo](#desarrollo) para ejecutarlo manualmente, o modifica el LaunchAgent para cambiar el host.
+## Updating
 
-## Actualizacion
+**From the menu bar:** click the icon → **Check for Updates**. If a new
+version is available, an update option appears.
 
-### Desde la barra de menu
-
-Click en el icono 🔊 → **Buscar Actualizaciones**. Si hay una nueva version disponible, aparecera la opcion para actualizar con un click.
-
-### Desde terminal
+**From the terminal:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/benjifc/macTTS/main/install.sh | bash -s -- --update
 ```
 
-El proceso de actualizacion:
-1. Compara la version local con la publicada en GitHub
-2. Si hay una nueva version, detiene los servicios
-3. Descarga el nuevo codigo (preservando logs y entorno virtual)
-4. Actualiza dependencias
-5. Regenera los LaunchAgents
-6. Reinicia todo automaticamente
+The update process compares the local version against GitHub, stops the
+services, downloads the new code (preserving logs and the virtual
+environment), refreshes dependencies, regenerates the LaunchAgents, and
+restarts everything.
 
-## Desinstalacion
+## Uninstalling
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/benjifc/macTTS/main/install.sh | bash -s -- --uninstall
 ```
 
-Esto elimina:
-- El directorio de instalacion (`~/.local/share/mactts/`)
-- Los LaunchAgents (`com.mactts.service` y `com.mactts.menubar`)
-- El icono de la barra de menu
+This removes the install directory (`~/.local/share/mactts/`), both
+LaunchAgents (`com.mactts.service` and `com.mactts.menubar`), and the menu bar
+icon. A standalone `uninstall.sh` is also included in the repository.
 
-## Desarrollo
-
-### Ejecutar localmente
+## Development
 
 ```bash
 git clone https://github.com/benjifc/macTTS.git
@@ -264,63 +273,64 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# API
+# API (http://127.0.0.1:8000, with hot reload)
 python main.py
 
-# Barra de menu (en otra terminal)
+# Menu bar app (in a second terminal)
 python menubar.py
 ```
 
-La API se ejecuta en `http://127.0.0.1:8000` con hot-reload habilitado.
-
-### Estructura del proyecto
+### Project structure
 
 ```
 macTTS/
-├── main.py                    # API REST (FastAPI + Uvicorn)
-├── menubar.py                 # App de barra de menu (rumps)
-├── install.sh                 # Instalador / actualizador / desinstalador
-├── requirements.txt           # Dependencias Python
-├── VERSION                    # Version actual (semver)
-├── com.mactts.service.plist   # LaunchAgent de referencia (desarrollo)
+├── main.py                    # REST API (FastAPI + Uvicorn)
+├── menubar.py                 # Menu bar app (rumps)
+├── install.sh                 # Installer / updater / uninstaller
+├── uninstall.sh               # Standalone uninstaller
+├── requirements.txt           # Python dependencies
+├── VERSION                    # Current version (semver)
+├── com.mactts.service.plist   # Reference LaunchAgent (for development)
+├── assets/                    # Menu bar icons
 └── README.md
 ```
 
-### Publicar una nueva version
-
-1. Edita el archivo `VERSION` con la nueva version (ej: `1.1.0`)
-2. Haz commit y push a `main`
-3. Los usuarios actualizan desde el menu bar o con `--update`
-
-## Arquitectura
+### Architecture
 
 ```
-┌─────────────────────┐     ┌────────────────────────────┐
-│   Menu Bar (rumps)   │────▶│   API (FastAPI)             │
-│   menubar.py         │     │   main.py                   │
+┌──────────────────────┐     ┌──────────────────────────────┐
+│  Menu Bar (rumps)    │────▶│  API (FastAPI)               │
+│  menubar.py          │     │  main.py                     │
 │                      │     │                              │
 │  - Health check /5s  │     │  GET  /health                │
-│  - Start/Stop        │     │  GET  /version               │
+│  - Start / Stop      │     │  GET  /version               │
 │  - Update check      │     │  GET  /voices                │
-│  - Open docs         │     │  POST /tts                   │
-└─────────────────────┘     │                              │
+│  - Open API docs     │     │  POST /tts                   │
+└──────────────────────┘     │                              │
                              │  OpenAI-compatible:          │
-┌─────────────────────┐     │  POST /v1/audio/speech       │
-│  OpenClaw / Apps     │────▶│  GET  /v1/models             │
-│  (provider: openai)  │     └──────────────┬───────────────┘
-└─────────────────────┘                     │
+┌──────────────────────┐     │  POST /v1/audio/speech       │
+│  Apps / OpenClaw     │────▶│  GET  /v1/models             │
+│  (provider: openai)  │     └───────────────┬──────────────┘
+└──────────────────────┘                     │
                                              ▼
-                                   ┌──────────────────┐
-                                   │   macOS `say`     │
-                                   │   + afconvert     │
-                                   │   + ffmpeg        │
-                                   └──────────────────┘
+                                  ┌──────────────────────┐
+                                  │  macOS `say`         │
+                                  │  + afconvert         │
+                                  │  + ffmpeg            │
+                                  └──────────────────────┘
 ```
 
-- **Menu Bar** y **API** corren como procesos independientes gestionados por `launchd`
-- La API escucha solo en `127.0.0.1` (loopback) por seguridad
-- CORS habilitado para integracion con aplicaciones web locales
+- The menu bar and the API run as independent processes managed by `launchd`.
+- The API listens only on `127.0.0.1` (loopback) by default.
+- CORS is enabled for integration with local web applications.
 
-## Licencia
+### Releasing a new version
 
-MIT
+1. Edit `VERSION` with the new semver value (for example `2.1.0`).
+2. Commit and push to `main`.
+3. Users update from the menu bar or with `--update`.
+
+## License
+
+Released under the [MIT License](LICENSE). Copyright © 2026
+Benjamin Fernandez Carrasco.
